@@ -10,7 +10,7 @@ import socket
 import time
 
 # Define the host and port
-host, port = "127.0.0.1", 9090
+host, port = "127.0.0.1", 9091
 
 # Create a socket
 serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
