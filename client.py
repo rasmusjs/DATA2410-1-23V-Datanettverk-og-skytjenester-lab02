@@ -1,14 +1,13 @@
+import _thread as thread
 import socket
 import time
 
-host, port = "127.0.0.1", 9091
+host, port = "127.0.0.1", 9090
 
-"""    # Create the request with header
-    request = str(input("Enter request: "))
-    # Encode the response
-    request = request.encode()
-    # Send the response
-    sock.send(request)"""
+"""def resetConnection():
+    print("Resetting connection...")
+    time.sleep(5)
+    main()"""
 
 try:
     # Create new socket
@@ -18,7 +17,8 @@ try:
     print("Connecting to " + host + ":" + str(port) + "\n")
 except ConnectionRefusedError:
     print("Connection refused. Please check the host and port, and try again.")
-    exit(1)
+    #resetConnection()
+    # exit(1)
 
 
 def listen():
@@ -26,17 +26,38 @@ def listen():
     while True:
         time.sleep(3)
         try:
-            response = sock.recv(3).decode()
-            if response in "420":
-                sock.send("69".encode())
-            else:
-                print(response)
+            # Get the raw response from server
+            rawResponse = sock.recv(1024).decode()
+            response2 = rawResponse.replace('HelloClient', '')
+            if len(response2) != 0:
+                print("\n" + response2)
+            if rawResponse in "HelloClient":
+                sock.send("HelloServer".encode())
+
         except socket.error:
             print("Lost connection from the server")
-            exit(1)
+            #resetConnection()
+            # exit(1)
 
 
+def chat():
+    textrequest = str(input("Enter a request (type 'exit' to exit):"))
+    if textrequest != "exit":
+        request = textrequest
+        # Encode the response
+        request = request.encode()
+        # Send the response
+        sock.send(request)
+        print("Message sent " + textrequest)
+    else:
+        exit(1)
+    global chatstarted
+    chatstarted = False
+
+
+chatstarted = False
 while True:
-    # Try to connect to the server
-    # thread.start_new_thread(listen, ())
-    listen()
+    thread.start_new_thread(listen, ())
+    if not chatstarted:
+        chatstarted = True
+        chat()

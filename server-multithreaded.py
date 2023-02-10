@@ -10,7 +10,7 @@ import socket
 import time
 
 # Define the host and port
-host, port = "127.0.0.1", 9091
+host, port = "127.0.0.1", 9090
 
 # Create a socket
 serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -29,32 +29,79 @@ except socket.error:
 serverSocket.listen()
 
 
+def helpClient():
+    helptext = "Commands: \n"
+    helptext += "––> help - Show this help screen \n"
+    helptext += "––> exit - Exit the server\n"
+    helptext += "––> list - List all connected clients\n"
+    helptext += "––> nick yournickname - Set a nickname\n"
+    helptext += "––> broadcast - Broadcast a message to all clients\n"
+    helptext += "––> message - Send a message to a specific client\n"
+    helptext += "––> game - Start a game with a client \n" + linje
+    return helptext
+
+
+nicknames = []
+
+
+class Client:
+
+    def __init__(self, numb, nickname, clientSocket):
+        self.numb = numb
+        self.nickname = nickname
+        self.clientSocket = clientSocket
+
+
+def listOfClients(clientSocket):
+    clientlist = "Connected clients: "
+    for client in nicknames:
+        if client.clientSocket == clientSocket:
+            clientlist += "You "
+        clientlist += client.nickname
+    return clientlist
+
+
 # This function handles the client connection, it sends the response to the client and closes the connection
-def handleclient(clientSocket, clientIP):
-    try:
-        print("Started new thread for client" + str(
-            clientIP) + linje)
-        # Get the request
-        clientRequest = clientSocket.recv(4096).decode()
-        print(clientRequest)
-        # Encode the response
-        response = "Received request: " + clientRequest
-        response = response.encode()
-        # Send the response
-        clientSocket.sendall(response)
-        # Close the connection
-        # clientSocket.close()
-    except socket.error:
-        print("Client " + str(addr) + " disconnected from the server")
-        clients.remove(clientSocket)
+def handleClient(clientSocket, clientIP):
+    print("Started new thread for client" + str(
+        clientIP) + linje)
+    # Send help text to client
+    clientSocket.send(helpClient().encode())
+    while True:
+        try:
+            # Get the request
+            clientRequest = clientSocket.recv(1024).decode()
+
+            # Check if the client wants to exit
+            if clientRequest == "exit":
+                print("Client " + str(clientIP) + " disconnected from the server")
+                clients.remove(clientSocket)
+                break
+            else:
+                clientRequest = clientRequest.replace('HelloServer', '')
+                if len(clientRequest) != 0:
+                    print("Client " + str(clientIP) + " sent a request: " + clientRequest)
+                    if "help" in clientRequest:
+                        clientSocket.send(helpClient().encode())
+                """ elif "nick" in clientRequest:
+                     clientRequest = clientRequest.split(" ")
+                     for client in nicknames:
+                         if client.clientSocket == clientSocket:
+                             client.nickname = clientRequest[1]
+                             clientSocket.send("Nickname changed to " + clientRequest[1] + linje)
+                 elif clientRequest == "list":
+                     clientSocket.send(listOfClients(clientSocket).encode())"""
+        except socket.error:
+            print("Client " + str(addr) + " disconnected from the server")
+            clients.remove(clientSocket)
+            break
 
 
 def broadcast(clientSocket, clientIP):
     if len(clients) > 1:
-        print("Broadcasting to everyone exept joined client")
         for client in clients:
             if client != clientSocket:
-                broadcastMessage = "New client " + str(clientIP)
+                broadcastMessage = "New client  " + str(clientIP) + " connected to the server"
                 try:
                     time.sleep(0.5)
                     client.send(broadcastMessage.encode())
@@ -64,40 +111,35 @@ def broadcast(clientSocket, clientIP):
 
 # Check if any clients have disconnected
 def checkForConnections():
-    global checkForConnectionsThread
-    checkForConnectionsThread = True
     print("Started new thread to check for disconnected clients" + linje)
     while True:
         # Sleep for 2 seconds
         time.sleep(2)
         for client in clients:
             try:
-                # client.sendall("Hello client".encode())
-                client.sendall("420".encode())
+                client.sendall("HelloClient".encode())
             except socket.error:
                 print("Client " + str(addr) + " disconnected from the server")
                 clients.remove(client)
         if len(clients) == 0:
             break
     print("No connections" + linje)
-    checkForConnectionsThread = False
 
 
-# List of clients
+# List of active clients
 clients = []
+messages = []
 
-checkForConnectionsThread = False
 # This loop will run forever, accepting connections and serving creating a new thread for each connection
 while True:
     # Accept a connections
     clientSocket, addr = serverSocket.accept()
     # Add the client to the list of clients
     clients.append(clientSocket)
-    print("Client connected to the server" + str(addr))
+    # nicknames.append((len(clients), "Client " + str(len(clients)), clientSocket))
     broadcast(clientSocket, addr)
-    # thread.start_new_thread(handleclient, (clientSocket, addr))
+    thread.start_new_thread(handleClient, (clientSocket, addr))
     # Start a new thread to check for disconnected clients if not started
-    # not checkForConnectionsThread and
     if len(clients) == 1:
         thread.start_new_thread(checkForConnections, ())
 
