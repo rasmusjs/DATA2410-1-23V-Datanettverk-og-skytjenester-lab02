@@ -10,7 +10,7 @@ import socket
 import time
 
 # Define the host and port
-host, port = "127.0.0.1", 9090
+host, port = "127.0.0.1", 9091
 
 # Create a socket
 serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -29,35 +29,39 @@ except socket.error:
 serverSocket.listen()
 
 
+def message(socketNumber, text):
+    global clients
+    if socketNumber == "*":
+        for client in clients:
+            client.send(text.encode())
+        print("Sending message to all clients –> " + text)
+    elif socketNumber.isnumeric():
+        if socketNumber < len(clients):
+            client = clients[int(socketNumber)]
+            client.send(text.encode())
+            print("Sending message to " + str(socketNumber) + " –> " + text)
+
+
 def helpClient():
     helptext = "Commands: \n"
     helptext += "––> help - Show this help screen \n"
     helptext += "––> exit - Exit the server\n"
     helptext += "––> list - List all connected clients\n"
-    helptext += "––> nick yournickname - Set a nickname\n"
-    helptext += "––> broadcast - Broadcast a message to all clients\n"
-    helptext += "––> message - Send a message to a specific client\n"
+    helptext += "––> message id message - Send a message to a specific client or use * for all clients\n"
     helptext += "––> game - Start a game with a client \n" + linje
     return helptext
 
 
-nicknames = []
-
-
-class Client:
-
-    def __init__(self, numb, nickname, clientSocket):
-        self.numb = numb
-        self.nickname = nickname
-        self.clientSocket = clientSocket
-
-
 def listOfClients(clientSocket):
-    clientlist = "Connected clients: "
-    for client in nicknames:
-        if client.clientSocket == clientSocket:
-            clientlist += "You "
-        clientlist += client.nickname
+    clientlist = "Connected clients:  \n"
+    i = 0
+    for client in clients:
+        if client == clientSocket:
+            clientlist += "Your clientID is " + str(i)
+        else:
+            clientlist += "User " + str(i)
+        clientlist += "\t"
+        i += 1
     return clientlist
 
 
@@ -66,7 +70,7 @@ def handleClient(clientSocket, clientIP):
     print("Started new thread for client" + str(
         clientIP) + linje)
     # Send help text to client
-    clientSocket.send(helpClient().encode())
+    clientSocket.send("Write help for available commands ".encode())
     while True:
         try:
             # Get the request
@@ -83,14 +87,13 @@ def handleClient(clientSocket, clientIP):
                     print("Client " + str(clientIP) + " sent a request: " + clientRequest)
                     if "help" in clientRequest:
                         clientSocket.send(helpClient().encode())
-                """ elif "nick" in clientRequest:
-                     clientRequest = clientRequest.split(" ")
-                     for client in nicknames:
-                         if client.clientSocket == clientSocket:
-                             client.nickname = clientRequest[1]
-                             clientSocket.send("Nickname changed to " + clientRequest[1] + linje)
-                 elif clientRequest == "list":
-                     clientSocket.send(listOfClients(clientSocket).encode())"""
+                    elif "list" in clientRequest:
+                        clientSocket.send(listOfClients(clientSocket).encode())
+                    elif "msg" in clientRequest or "message" in clientRequest:
+                        toClient = clientRequest.split(" ")[1]
+                        text = clientRequest.split(" ")[2]
+                        message(toClient, text)
+
         except socket.error:
             print("Client " + str(addr) + " disconnected from the server")
             clients.remove(clientSocket)
@@ -136,7 +139,6 @@ while True:
     clientSocket, addr = serverSocket.accept()
     # Add the client to the list of clients
     clients.append(clientSocket)
-    # nicknames.append((len(clients), "Client " + str(len(clients)), clientSocket))
     broadcast(clientSocket, addr)
     thread.start_new_thread(handleClient, (clientSocket, addr))
     # Start a new thread to check for disconnected clients if not started
