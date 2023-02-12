@@ -31,15 +31,16 @@ serverSocket.listen()
 
 def message(socketNumber, text):
     global clients
+    # Send message to all clients if * is used
     if socketNumber == "*":
         for client in clients:
             client.send(text.encode())
         print("Sending message to all clients –> " + text)
+    # Send message to specific client if a number is used
     elif socketNumber.isnumeric():
-        if socketNumber < len(clients):
-            client = clients[int(socketNumber)]
-            client.send(text.encode())
-            print("Sending message to " + str(socketNumber) + " –> " + text)
+        client = clients[int(socketNumber)]
+        client.send(text.encode())
+        print("Sending message to " + str(socketNumber) + " –> " + text)
 
 
 def helpClient():
@@ -69,6 +70,7 @@ def listOfClients(clientSocket):
 def handleClient(clientSocket, clientIP):
     print("Started new thread for client" + str(
         clientIP) + linje)
+    chatlog = []
     # Send help text to client
     clientSocket.send("Write help for available commands ".encode())
     while True:
@@ -84,16 +86,27 @@ def handleClient(clientSocket, clientIP):
             else:
                 clientRequest = clientRequest.replace('HelloServer', '')
                 if len(clientRequest) != 0:
+                    chatlog.append(clientRequest)
                     print("Client " + str(clientIP) + " sent a request: " + clientRequest)
                     if "help" in clientRequest:
                         clientSocket.send(helpClient().encode())
                     elif "list" in clientRequest:
                         clientSocket.send(listOfClients(clientSocket).encode())
                     elif "msg" in clientRequest or "message" in clientRequest:
+                        # Find the client to send the message to
                         toClient = clientRequest.split(" ")[1]
-                        text = clientRequest.split(" ")[2]
+                        text = ""
+                        # Get all the words after the clientID
+                        for i in range(2, len(clientRequest.split(" "))):
+                            if i == 2:
+                                text = clientRequest.split(" ")[i]
+                            else:
+                                text += " " + clientRequest.split(" ")[i]
                         message(toClient, text)
-
+                    elif "game" in clientRequest:
+                        clientSocket.send("Game started".encode())
+                    elif "log" in clientRequest:
+                        clientSocket.send(str(chatlog).encode())
         except socket.error:
             print("Client " + str(addr) + " disconnected from the server")
             clients.remove(clientSocket)
