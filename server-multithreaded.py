@@ -8,6 +8,7 @@
 import _thread as thread
 import socket
 import time
+import random as random
 
 # Define the host and port
 host, port = "127.0.0.1", 9091
@@ -37,10 +38,14 @@ def message(socketNumber, text):
             client.send(text.encode())
         print("Sending message to all clients –> " + text)
     # Send message to specific client if a number is used
-    elif socketNumber.isnumeric():
-        client = clients[int(socketNumber)]
-        client.send(text.encode())
-        print("Sending message to " + str(socketNumber) + " –> " + text)
+    else:
+        try:
+            socketNumber = int(socketNumber)
+            client = clients[int(socketNumber)]
+            client.send(text.encode())
+            print("Sending message to " + str(socketNumber) + " –> " + text)
+        except ValueError:
+            print("Invalid clientID")
 
 
 def helpClient():
@@ -49,6 +54,7 @@ def helpClient():
     helptext += "––> exit - Exit the server\n"
     helptext += "––> list - List all connected clients\n"
     helptext += "––> message id message - Send a message to a specific client or use * for all clients\n"
+    helptext += "––> log - Get the request log\n"
     helptext += "––> game - Start a game with a client \n" + linje
     return helptext
 
@@ -66,13 +72,54 @@ def listOfClients(clientSocket):
     return clientlist
 
 
+def getClientId(clientSocket):
+    i = 0
+    for client in clients:
+        if client == clientSocket:
+            return i
+        i += 1
+
+
+def startGame(firstClient, secondClient):
+    message(secondClient, str(firstClient) + " wants to play a game with you. Type 'yes' to accept or 'no' to decline")
+    while True:
+        try:
+            # Get the request
+            clientRequest = clientSocket.recv(1024).decode()
+            if clientRequest == "yes":
+                msg = "Game started"
+                message(firstClient, msg)
+                message(secondClient, msg)
+                msg = "Tossing coin..."
+                message(firstClient, msg)
+                message(secondClient, msg)
+                cointoss = random.randint(0, 1)
+
+                if cointoss == 0:
+                    message(firstClient, "You won the coin toss, choose (r)ock, (p)aper or (s)cissors")
+                    message(secondClient, "You lost the coin toss, please wait for your opponent to choose")
+                else:
+                    message(firstClient, "You lost the coin toss, please wait for your opponent to choose")
+                    message(secondClient, "You won the coin toss, choose (r)ock, (p)aper or (s)cissors")
+                break
+            elif clientRequest == "no":
+                message(firstClient, "Game declined")
+                message(secondClient, "Game declined")
+                break
+        except socket.error:
+            print("Client " + str(addr) + " disconnected from the server")
+            clients.remove(clientSocket)
+            break
+
+
 # This function handles the client connection, it sends the response to the client and closes the connection
 def handleClient(clientSocket, clientIP):
     print("Started new thread for client" + str(
         clientIP) + linje)
+    # Request log
     chatlog = []
-    # Send help text to client
-    clientSocket.send("Write help for available commands ".encode())
+    # Send welcome message to the client
+    clientSocket.send("Welcome to the chat! Type 'help' for help. ".encode())
     while True:
         try:
             # Get the request
@@ -104,7 +151,9 @@ def handleClient(clientSocket, clientIP):
                                 text += " " + clientRequest.split(" ")[i]
                         message(toClient, text)
                     elif "game" in clientRequest:
-                        clientSocket.send("Game started".encode())
+                        # Find the client to send the message to
+                        toClient = clientRequest.split(" ")[1]
+                        startGame(getClientId(clientSocket), toClient)
                     elif "log" in clientRequest:
                         clientSocket.send(str(chatlog).encode())
         except socket.error:
