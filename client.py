@@ -57,7 +57,9 @@ def sendUserInput():
     # Set sendingInput to false, so the user can send another request
     global sendingInput
     sendingInput = False
-
+    # Response from server if the user wants to play a game
+    if request == "/play":
+        print("Waiting for another player...")
 
 # This is used give the user a new line before the first request
 firstChat = True

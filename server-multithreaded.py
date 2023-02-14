@@ -124,7 +124,10 @@ def handleClient(clientSocket, clientIP):
         try:
             # Get the request
             clientRequest = clientSocket.recv(1024).decode()
-
+            # Start game
+            if clientRequest == "/play":
+                startGame(addr)
+                break
             # Check if the client wants to exit
             if clientRequest == "exit":
                 print("Client " + str(clientIP) + " disconnected from the server")
@@ -160,6 +163,26 @@ def handleClient(clientSocket, clientIP):
             print("Client " + str(addr) + " disconnected from the server")
             clients.remove(clientSocket)
             break
+
+
+game_sessions = {} # Keep track of players and choices
+# This function difines the game logic
+def playGame(player1Choice, player2Choice):
+    if player1Choice == player2Choice:
+        return "Draw"
+    elif (player1Choice == "r" and player2Choice == "s") or (player1Choice == "s" and player2Choice == "p") or (
+            player1Choice == "p" and player2Choice == "r"):
+        return "Player 1 won"
+    else:
+        return "Player 2 won"
+
+
+def startGame(username):
+    if username in game_sessions:
+        return "You are already in a game"
+    else:
+        game_sessions[username] = ""
+        return "Waiting for another player to join"
 
 
 def broadcast(clientSocket, clientIP):
