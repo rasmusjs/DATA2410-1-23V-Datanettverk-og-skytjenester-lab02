@@ -8,7 +8,6 @@
 import _thread as thread
 import socket
 import time
-import random as random
 
 # Define the host and port
 host, port = "127.0.0.1", 9091
@@ -32,6 +31,7 @@ serverSocket.listen()
 
 def message(socketNumber, text):
     global clients
+    socketNumber = str(socketNumber)
     # Send message to all clients if * is used
     if socketNumber == "*":
         for client in clients:
@@ -80,42 +80,94 @@ def getClientId(clientSocket):
         i += 1
 
 
-def startGame(firstClient, secondClient):
-    message(secondClient, str(firstClient) + " wants to play a game with you. Type 'yes' to accept or 'no' to decline")
+def startGame(firstClientNumber, secondClientNumber):
+    global clients
+
+    # Save the clientID as an integer
+    firstClientNumber = int(firstClientNumber)
+    secondClientNumber = int(secondClientNumber)
+
+    # Send message to the secondClient
+    message(secondClientNumber,
+            str(firstClientNumber) + " wants to play a game with you. Type 'yes' to accept or 'no' to decline")
+
+    # Get the socket number from the clients
+    try:
+        client1Socket = clients[firstClientNumber]
+        client2Socket = clients[secondClientNumber]
+    except ValueError:
+        print("Invalid clientID")
+        return
+
+    gameStarted = False
     while True:
         try:
-            # Get the request
-            clientRequest = clientSocket.recv(1024).decode()
-            if clientRequest == "yes":
-                msg = "Game started"
-                message(firstClient, msg)
-                message(secondClient, msg)
-                msg = "Tossing coin..."
-                message(firstClient, msg)
-                message(secondClient, msg)
-                cointoss = random.randint(0, 1)
+            firstClientResponse = ""
+            secondClientResponse = ""
+            # Get the response from the clients
+            for chat in clientLogs:
+                if chat.clientId == firstClientNumber:
+                    firstClientResponse = chat.response
+                if chat.clientId == secondClientNumber:
+                    secondClientResponse = chat.response
 
-                if cointoss == 0:
-                    message(firstClient, "You won the coin toss, choose (r)ock, (p)aper or (s)cissors")
-                    message(secondClient, "You lost the coin toss, please wait for your opponent to choose")
+            if firstClientResponse != "" or secondClientResponse != "":
+                """firstClientResponse = client1Socket.recv(1024).decode()
+                secondClientResponse = client2Socket.recv(1024).decode()"""
+
+                print(firstClientResponse + " " + secondClientResponse)
+
+                if "yes" in secondClientResponse:
+                    msg = "Game started"
+                    message(firstClientNumber, msg)
+                    message(secondClientNumber, msg)
+                    gameStarted = True
+                    time.sleep()
+                elif "no" in secondClientResponse:
+                    message(firstClientNumber, "Game declined")
+                    message(secondClientNumber, "Game declined")
+                    break
+
+                if gameStarted:
+                    if firstClientResponse == secondClientResponse:
+                        msg = "You both chose " + firstClientResponse + ". It's a tie!"
+                        message(firstClientNumber, msg)
+                        message(secondClientNumber, msg)
+                elif (firstClientResponse == "r" and secondClientResponse == "s") or (
+                        firstClientResponse == "s" and secondClientResponse == "p") or (
+                        firstClientResponse == "p" and secondClientResponse == "r"):
+                    msg = "You chose " + firstClientResponse + " and your opponent chose " + secondClientResponse + ". You won!"
+                    message(firstClientNumber, msg)
+                    msg = "You chose " + secondClientResponse + " and your opponent chose " + firstClientResponse + ". You lost!"
+                    message(secondClientNumber, msg)
                 else:
-                    message(firstClient, "You lost the coin toss, please wait for your opponent to choose")
-                    message(secondClient, "You won the coin toss, choose (r)ock, (p)aper or (s)cissors")
-                break
-            elif clientRequest == "no":
-                message(firstClient, "Game declined")
-                message(secondClient, "Game declined")
-                break
+                    msg = "You chose " + firstClientResponse + " and your opponent chose " + secondClientResponse + ". You lost!"
+                    message(firstClientNumber, msg)
+                    msg = "You chose " + secondClientResponse + " and your opponent chose " + firstClientResponse + ". You won!"
+                    message(secondClientNumber, msg)
+
+            clientLogs.clear()
         except socket.error:
             print("Client " + str(addr) + " disconnected from the server")
             clients.remove(clientSocket)
             break
 
 
+# Keep track of all the clients messages
+clientLogs = []
+
+
+class ClientLog:
+    def __init__(self, clientId, response):
+        self.clientId = clientId
+        self.response = response
+
+
 # This function handles the client connection, it sends the response to the client and closes the connection
 def handleClient(clientSocket, clientIP):
     print("Started new thread for client" + str(
         clientIP) + linje)
+    clientID = getClientId(clientSocket)
     # Request log
     chatlog = []
     # Send welcome message to the client
@@ -136,7 +188,9 @@ def handleClient(clientSocket, clientIP):
             else:
                 clientRequest = clientRequest.replace('HelloServer', '')
                 if len(clientRequest) != 0:
+                    # Add the request to the logs
                     chatlog.append(clientRequest)
+                    clientLogs.append(ClientLog(clientID, clientRequest))
                     print("Client " + str(clientIP) + " sent a request: " + clientRequest)
                     if "help" in clientRequest:
                         clientSocket.send(helpClient().encode())
@@ -165,7 +219,9 @@ def handleClient(clientSocket, clientIP):
             break
 
 
-game_sessions = {} # Keep track of players and choices
+game_sessions = {}  # Keep track of players and choices
+
+
 # This function difines the game logic
 def playGame(player1Choice, player2Choice):
     if player1Choice == player2Choice:
@@ -177,7 +233,7 @@ def playGame(player1Choice, player2Choice):
         return "Player 2 won"
 
 
-def startGame(username):
+def startGameNew(username):
     if username in game_sessions:
         return "You are already in a game"
     else:
@@ -229,6 +285,9 @@ while True:
     # Start a new thread to check for disconnected clients if not started
     if len(clients) == 1:
         thread.start_new_thread(checkForConnections, ())
+    """if len(games) == 1:
+        
+        thread.start_new_thread(startGame(), ())"""
 
 # Close the socket
 serverSocket.close()
