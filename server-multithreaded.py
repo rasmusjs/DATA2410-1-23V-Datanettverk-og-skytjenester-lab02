@@ -206,7 +206,7 @@ def checkLobby():
                         # print("Client " + str(client) + " is in the lobby")
                         if client2 != client:
                             if len(activeGames) == 0:
-                                activeGames.append(Game(client, client2, 0, 0, 0, 0, 0))
+                                activeGames.append(Game(client, client2, "", "", 0, 0, 0))
                                 print("Game started between " + str(client) + " and " + str(client2))
                         # Dette funker ikke, vi får en evig løkke her
                         # else:
@@ -216,8 +216,8 @@ def checkLobby():
                         #              print("Game started between " + str(client) + " and " + str(client2))"""
                 for game in activeGames:
                     # Reset the choices for each round
-                    game.player1Choice = ""
-                    game.player2Choice = ""
+                    # game.player1Choice = ""
+                    # game.player2Choice = ""
 
                     if game.round == 0:
                         msg = "Starting game..."
@@ -228,23 +228,27 @@ def checkLobby():
                         sendRound = "Round " + str(game.round)
                         game.socket1.send(sendRound.encode())
                         game.socket2.send(sendRound.encode())
+                    if game.round == 3:
+                        sendRound = "Last round"
+                        game.socket1.send(sendRound.encode())
+                        game.socket2.send(sendRound.encode())
 
                     # Get the messages from the game in the game
                     for clientRequest in clientRequests:
                         # If the socket  is the same as the client in the lobby do stuff
-                        if game.player1Choice == "":
-                            if clientRequest.clientSocket == game.socket1:
-                                game.player1Choice = clientRequest.request
-                                print("Player 1 message:" + clientRequest.request)
-                                clientRequests.remove(clientRequest)
-                            if game.player2Choice == "":
-                                if clientRequest.clientSocket == game.socket2:
-                                    game.player2Choice = clientRequest.request
-                                    print("Player 2 message:" + clientRequest.request)
-                                    clientRequests.remove(clientRequest)
+                        if game.player1Choice == "" and clientRequest.clientSocket == game.socket1 and clientRequest.request != "game" and clientRequest.request != "":
+                            game.player1Choice = str(clientRequest.request)
+                            print("Player 1 message:" + clientRequest.request)
+                            clientRequests.remove(clientRequest)
+                            continue
+                        if game.player2Choice == "" and clientRequest.clientSocket == game.socket2 and clientRequest.request != "game" and clientRequest.request != "":
+                            game.player2Choice = str(clientRequest.request)
+                            print("Player 2 message:" + clientRequest.request)
+                            clientRequests.remove(clientRequest)
+                            continue
 
-                    # print("Player 1 said:" + game.player1Choice)
-                    # print("Player 2 said:" + game.player2Choice)
+                    print("Player 1 said:" + game.player1Choice)
+                    print("Player 2 said:" + game.player2Choice)
 
                     # If we have 2 game in a lobby start the game
                     if game.player1Choice != "" and game.player2Choice != "":
@@ -253,6 +257,8 @@ def checkLobby():
                         if game.player1Choice == game.player2Choice and game.player1Choice != "game":
                             game.socket1.sendall("Tie".encode())
                             game.socket2.sendall("Tie".encode())
+                            game.player1Choice = ""
+                            game.player2Choice = ""
                             game.round += 1
                         elif (game.player1Choice == "r" and game.player2Choice == "s") or (
                                 game.player1Choice == "s" and game.player2Choice == "p") or (
@@ -260,6 +266,8 @@ def checkLobby():
                             game.socket1.sendall("Won this round ".encode())
                             game.socket2.sendall("Lost this round".encode())
                             game.clientSocket1Points += 1
+                            game.player1Choice = ""
+                            game.player2Choice = ""
                             game.round += 1
                         elif (game.player1Choice == "r" and game.player2Choice == "p") or (
                                 game.player1Choice == "s" and game.player2Choice == "r") or (
@@ -267,9 +275,11 @@ def checkLobby():
                             game.socket1.sendall("Lost this round".encode())
                             game.socket2.sendall("Won this round ".encode())
                             game.clientSocket2Points += 1
+                            game.player1Choice = ""
+                            game.player2Choice = ""
                             game.round += 1
                             # If the game is over remove the game from the active games list and the lobby
-                        if game.round == 3:
+                        if game.round == 4:
                             if game.clientSocket1Points > game.clientSocket2Points:
                                 game.socket1.sendall("You won the game!".encode())
                                 game.socket2.sendall("You lost the game, better luck next time".encode())
