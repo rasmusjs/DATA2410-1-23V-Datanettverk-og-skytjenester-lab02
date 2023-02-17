@@ -4,8 +4,6 @@ import time
 
 host, port = "127.0.0.1", 9091
 
-closeThreads = False
-
 # Create the socket
 try:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -16,7 +14,11 @@ except ConnectionRefusedError:
     print("Connection refused. Please check the host and port, and try again.")
     exit(1)
 
+# Variable used to quit the program if the server is not responding
+connected = True
 
+
+# This function is used to listen for new messages from the server, it also keeps the socket alive
 def listen():
     while True:
         # Sleep for 1 second before checking for new messages
@@ -36,7 +38,9 @@ def listen():
         # If the server is not responding, exit the program
         except socket.error:
             print("Lost connection from the server")
-            exit(1)
+            break
+    global connected
+    connected = False
 
 
 # This function is used to send messages to the server
@@ -57,18 +61,22 @@ def sendUserInput():
     # Set sendingInput to false, so the user can send another request
     global sendingInput
     sendingInput = False
-    # Response from server if the user wants to play a game
-    if request == "/play":
-        print("Waiting for another player...")
+
 
 # This is used give the user a new line before the first request
 firstChat = True
 sendingInput = False
 
 while True:
-    # If the user is not listening, start a new thread to listen for new messages, and keep the socket alive
-    thread.start_new_thread(listen, ())
-    # If the user is not sending input, start a new thread to send input
-    if not sendingInput:
-        sendingInput = True
-        sendUserInput()
+    try:
+        if connected:
+            # If the user is not listening, start a new thread to listen for new messages, and keep the socket alive
+            thread.start_new_thread(listen, ())
+            # If the user is not sending input, start a new thread to send input
+            if not sendingInput:
+                sendingInput = True
+                sendUserInput()
+    except socket.error:
+        print("Lost connection from the server")
+        break
+exit(1)
