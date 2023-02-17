@@ -1,8 +1,8 @@
-# A server should keep track of the total number of activeSockets, allow activeSockets to send messages and broadcast
+# A server should keep track of the total number of connectedClients, allow connectedClients to send messages and broadcast
 # everyone. Below are some key functions you must implement:
 # • You should implement a function named broadcast to notify everyone when a client joins (except
 # the client who joined).
-# • You should also implement a function called game where it will allow two activeSockets to play rock,
+# • You should also implement a function called game where it will allow two connectedClients to play rock,
 # paper, scissors game.
 
 import _thread as thread
@@ -30,18 +30,18 @@ serverSocket.listen()
 
 
 def message(socketNumber, text):
-    global activeSockets
+    global connectedClients
     socketNumber = str(socketNumber)
-    # Send message to all activeSockets if * is used
+    # Send message to all connectedClients if * is used
     if socketNumber == "*":
-        for client in activeSockets:
+        for client in connectedClients:
             client.send(text.encode())
-        print("Sending message to all activeSockets –> " + text)
+        print("Sending message to all connectedClients –> " + text)
     # Send message to specific client if a number is used
     else:
         try:
             socketNumber = int(socketNumber)
-            client = activeSockets[int(socketNumber)]
+            client = connectedClients[int(socketNumber)]
             client.send(text.encode())
             print("Sending message to " + str(socketNumber) + " –> " + text)
         except ValueError:
@@ -52,18 +52,18 @@ def helpClient():
     helptext = "Commands: \n"
     helptext += "––> help - Show this help screen \n"
     helptext += "––> exit - Exit the server\n"
-    helptext += "––> list - List all connected activeSockets\n"
-    helptext += "––> message id message - Send a message to a specific client or use * for all activeSockets\n"
+    helptext += "––> list - List all connected connectedClients\n"
+    helptext += "––> message id message - Send a message to a specific client or use * for all connectedClients\n"
     helptext += "––> log - Get the request log\n"
-    helptext += "––> game - Start a game with a client \n" + line
+    helptext += "––> game - Start a online game with rock paper scissors\n" + line
     return helptext
 
 
-def listOfClients(clientSocket):
-    clientlist = "Connected activeSockets:  \n"
+def listOfClients(client):
+    clientlist = "Connected connected users:  \n"
     i = 0
-    for client in activeSockets:
-        if client == clientSocket:
+    for connected in connectedClients:
+        if connected == client:
             clientlist += "Your clientID is " + str(i)
         else:
             clientlist += "User " + str(i)
@@ -72,130 +72,125 @@ def listOfClients(clientSocket):
     return clientlist
 
 
-def getClientId(clientSocket):
+def getClientId(client):
     i = 0
-    for client in activeSockets:
-        if client == clientSocket:
+    for connected in connectedClients:
+        if connected == client:
             return i
         i += 1
 
 
 # This function handles the client connection, it sends the response to the client and closes the connection
-def handleClient(clientSocket, clientIP):
+def handleClient(client, clientIP):
     print("Started new thread for client" + str(
         clientIP) + line)
+    # Get access to the clientRequests list
     global clientRequests
     # Request log
     chatlog = []
     # Send welcome message to the client
-    clientSocket.send("Welcome to the chat! Type 'help' for help. ".encode())
+    client.send("Welcome to the chat! Type 'help' for help. ".encode())
     while True:
         try:
             # Get the request and remove the HelloServer from the request
-            request = formatRequest(clientSocket)
-            # request = clientSocket.recv(1024).decode().replace('HelloServer', '')
+            request = formatRequest(client)
+            # request = client.recv(1024).decode().replace('HelloServer', '')
 
             # If the request is not empty
             if len(request) != 0:
                 # Add the request to the logs
                 chatlog.append(request)
-                clientRequests.append(ClientLog(clientSocket, request))
+                clientRequests.append(ClientLog(client, request))
                 print("Client " + str(clientIP) + " sent a request: " + request)
                 if "help" == request:
-                    clientSocket.send(helpClient().encode())
+                    client.send(helpClient().encode())
                 elif "list" == request:
-                    clientSocket.send(listOfClients(clientSocket).encode())
+                    client.send(listOfClients(client).encode())
                 elif "msg" == request or "message" == request:
-                    # Find the client to send the message to
-                    toClient = request.split(" ")[1]
-                    text = ""
-                    # Get all the words after the clientID
-                    for i in range(2, len(request.split(" "))):
-                        if i == 2:
-                            text = request.split(" ")[i]
-                        else:
-                            text += " " + request.split(" ")[i]
-                    message(toClient, text)
+                    # Try to split the request, if it fails send an error message
+                    try:
+                        # Find the client to send the message to
+                        toClient = request.split(" ")[1]
+                        text = ""
+                        # Get all the words after the clientID
+                        for i in range(2, len(request.split(" "))):
+                            if i == 2:
+                                text = request.split(" ")[i]
+                            else:
+                                text += " " + request.split(" ")[i]
+                        message(toClient, text)
+                    except IndexError:
+                        client.send("Invalid message command".encode())
                 elif "game" in request:
                     print("Game request")
-                    gamelobby.append(clientSocket)
+                    gamelobby.append(client)
+                    client.send("Waiting for another player to join".encode())
                 elif "quit" == request:
-                    gamelobby.remove(clientSocket)
+                    gamelobby.remove(client)
                 elif "log" in request:
-                    clientSocket.send(str(chatlog).encode())
+                    client.send(str(chatlog).encode())
         except socket.error:
             print("Client " + str(addr) + " disconnected from the server")
-            activeSockets.remove(clientSocket)
+            connectedClients.remove(client)
             break
 
 
-game_sessions = {}  # Keep track of players and choices
-
-
-# This function difines the game logic
-def playGame(player1Choice, player2Choice):
-    if player1Choice == player2Choice:
-        return "Draw"
-    elif (player1Choice == "r" and player2Choice == "s") or (player1Choice == "s" and player2Choice == "p") or (
-            player1Choice == "p" and player2Choice == "r"):
-        return "Player 1 won"
-    else:
-        return "Player 2 won"
-
-
-def startGameNew(username):
-    if username in game_sessions:
-        return "You are already in a game"
-    else:
-        game_sessions[username] = ""
-        return "Waiting for another player to join"
-
-
-def broadcast(clientSocket, clientIP):
-    if len(activeSockets) > 1:
-        for client in activeSockets:
-            if client != clientSocket:
+# This  function notifies  everyone when a client joins (except the client who joined).
+def broadcast(client, clientIP):
+    # Check if there are more than 1 connected clients
+    if len(connectedClients) > 1:
+        # Loop through all connectedClients
+        for connected in connectedClients:
+            # If the client is not the client who joined send a message to the client
+            if connected != client:
                 broadcastMessage = "New client  " + str(clientIP) + " connected to the server"
+                # Try to send the message, if it fails remove the client from the connectedClients list
                 try:
                     time.sleep(0.5)
-                    client.send(broadcastMessage.encode())
+                    connected.send(broadcastMessage.encode())
                 except socket.error:
-                    print("Unable to send broacast message to " + str(client))
+                    print("Unable to send broadcast message to " + str(connected))
 
 
-# Check if any activeSockets have disconnected
+# This function checks if any clients have disconnected and keeps the connections with the clients alive
 def checkForConnections():
-    print("Started new thread to check for disconnected activeSockets" + line)
+    print("Started new thread to check for disconnected connectedClients" + line)
     global gamelobby
     while True:
         # Sleep for 2 seconds
         time.sleep(2)
-        for client in activeSockets:
+        # Loop through all clients
+        for client in connectedClients:
+            # Try to send a message to the client, if it fails remove the client from the list
             try:
                 client.sendall("HelloClient".encode())
             except socket.error:
                 print("Client " + str(addr) + " disconnected from the server")
-                activeSockets.remove(client)
-        if len(activeSockets) == 0:
+                connectedClients.remove(client)
+        # If there are no connected clients break the loop and set the gamelobby to empty
+        if len(connectedClients) == 0:
             gamelobby = []
             break
     print("No connections" + line)
 
 
-def formatRequest(socket):
+# This function formats the request, it removes the HelloServer from the request if it is there
+def formatRequest(request):
     # Format the request remove HelloServer
-    request = socket.recv(1024).decode().replace('HelloServer', '')
+    request = request.recv(1024).decode().replace('HelloServer', '')
     if len(request) == 0:
         return ""
     return request
 
 
-# Check if any activeSockets have disconnected
-def checkLobby():
+# This is the rock paper scissors games, it will allow two clients to play against each other
+def game():
     print("Started new thread to check for game seeking game" + line)
+    global gamelobby
+    global checkingGames
     activeGames = []
-    game = 0
     while True:
+        checkingGames = True
         # Sleep for 2 seconds
         time.sleep(2)
         for client in gamelobby:
@@ -206,143 +201,173 @@ def checkLobby():
                         # print("Client " + str(client) + " is in the lobby")
                         if client2 != client:
                             if len(activeGames) == 0:
-                                activeGames.append(Game(client, client2, "", "", 0, 0, 0))
+                                activeGames.append(Game(client, client2, "", "", 0, 0, 0, 0))
                                 print("Game started between " + str(client) + " and " + str(client2))
                         # Dette funker ikke, vi får en evig løkke her
                         # else:
-                        #      for game in activeGames:
-                        #          if game.socket1 != client and game.socket2 != client:
-                        #             activeGames.append(Game(client, client2, 0, 0))
-                        #              print("Game started between " + str(client) + " and " + str(client2))"""
-                for game in activeGames:
-                    # Reset the choices for each round
-                    # game.player1Choice = ""
-                    # game.player2Choice = ""
+                        #    for activeGame in activeGames:
+                        #        if activeGame.socket1 != client and activeGame.socket2 != client2:
+                        #            activeGames.append(Game(client, client2, "", "", 0, 0, 0, 0))
+                        #            print("Game started between " + str(client) + " and " + str(client2))
+                # This is the game logic for the game, it will run every 2 seconds
+                for activeGame in activeGames:
 
-                    if game.round == 0:
-                        msg = "Starting game..."
-                        game.socket1.send(msg.encode())
-                        game.socket2.send(msg.encode())
+                    # Send the message to the clients
+                    msg = "Starting a game of rock paper scissors, use r, p, or s to choose your move"
 
-                    if game.round < 3:
-                        sendRound = "Round " + str(game.round)
-                        game.socket1.send(sendRound.encode())
-                        game.socket2.send(sendRound.encode())
-                    if game.round == 3:
-                        sendRound = "Last round"
-                        game.socket1.send(sendRound.encode())
-                        game.socket2.send(sendRound.encode())
+                    if activeGame.round < 3:
+                        msg = "Round number  " + str(activeGame.round)
+
+                    if activeGame.round == 3:
+                        msg = "Last rounds"
+
+                    if activeGame.responseSent != 1:
+                        activeGame.socket1.send(msg.encode())
+                        activeGame.socket2.send(msg.encode())
+                        activeGame.responseSent = 1
 
                     # Get the messages from the game in the game
-                    for clientRequest in clientRequests:
+                    for clientR in clientRequests:
                         # If the socket  is the same as the client in the lobby do stuff
-                        if game.player1Choice == "" and clientRequest.clientSocket == game.socket1 and clientRequest.request != "game" and clientRequest.request != "":
-                            game.player1Choice = str(clientRequest.request)
-                            print("Player 1 message:" + clientRequest.request)
-                            clientRequests.remove(clientRequest)
-                            continue
-                        if game.player2Choice == "" and clientRequest.clientSocket == game.socket2 and clientRequest.request != "game" and clientRequest.request != "":
-                            game.player2Choice = str(clientRequest.request)
-                            print("Player 2 message:" + clientRequest.request)
-                            clientRequests.remove(clientRequest)
-                            continue
+                        if clientR.request != "game" and clientR.request != "":
+                            # Break the loop if the client wants to quit
+                            if clientR.request == "quit":
+                                gamelobby.remove(clientR.client)
+                                clientRequests.remove(clientR)
+                                continue
 
-                    print("Player 1 said:" + game.player1Choice)
-                    print("Player 2 said:" + game.player2Choice)
+                            # Check if the client has sent a valid message
+                            if clientR.request == "r" or clientR.request == "p" or clientR.request == "s":
+                                # Only add the message to the game if the player has not made a choice
+                                if activeGame.player1Choice == "" and clientR.client == activeGame.socket1:
+                                    activeGame.player1Choice = str(clientR.request)
+                                    # print("Player 1 message:" + clientR.request)
+                                    clientRequests.remove(clientR)
+                                    continue
+                                if activeGame.player2Choice == "" and clientR.client == activeGame.socket2:
+                                    activeGame.player2Choice = str(clientR.request)
+                                    # print("Player 2 message:" + clientR.request)
+                                    clientRequests.remove(clientR)
+                                    continue
+                    # If the players are not in the lobby remove the game between them
+                    if activeGame.socket1 not in gamelobby or activeGame.socket2 not in gamelobby:
+                        activeGame.socket1.send("Game ended, player left".encode())
+                        activeGame.socket2.send("Game ended,  player left".encode())
+                        activeGames.remove(activeGame)
+                        break
 
-                    # If we have 2 game in a lobby start the game
-                    if game.player1Choice != "" and game.player2Choice != "":
-                        print("Player 1 said:" + game.player1Choice)
-                        print("Player 2 said:" + game.player2Choice)
-                        if game.player1Choice == game.player2Choice and game.player1Choice != "game":
-                            game.socket1.sendall("Tie".encode())
-                            game.socket2.sendall("Tie".encode())
-                            game.player1Choice = ""
-                            game.player2Choice = ""
-                            game.round += 1
-                        elif (game.player1Choice == "r" and game.player2Choice == "s") or (
-                                game.player1Choice == "s" and game.player2Choice == "p") or (
-                                game.player1Choice == "p" and game.player2Choice == "r"):
-                            game.socket1.sendall("Won this round ".encode())
-                            game.socket2.sendall("Lost this round".encode())
-                            game.clientSocket1Points += 1
-                            game.player1Choice = ""
-                            game.player2Choice = ""
-                            game.round += 1
-                        elif (game.player1Choice == "r" and game.player2Choice == "p") or (
-                                game.player1Choice == "s" and game.player2Choice == "r") or (
-                                game.player1Choice == "p" and game.player2Choice == "s"):
-                            game.socket1.sendall("Lost this round".encode())
-                            game.socket2.sendall("Won this round ".encode())
-                            game.clientSocket2Points += 1
-                            game.player1Choice = ""
-                            game.player2Choice = ""
-                            game.round += 1
-                            # If the game is over remove the game from the active games list and the lobby
-                        if game.round == 4:
-                            if game.clientSocket1Points > game.clientSocket2Points:
-                                game.socket1.sendall("You won the game!".encode())
-                                game.socket2.sendall("You lost the game, better luck next time".encode())
-                            elif game.clientSocket1Points < game.clientSocket2Points:
-                                game.socket1.sendall("You lost the game, better luck next time".encode())
-                                game.socket2.sendall("You won the game!".encode())
+                    # If both players have made a choice, check who won the rounds and add the score, this is also the
+                    # game logic
+                    if activeGame.player1Choice != "" and activeGame.player2Choice != "":
+                        print("Player 1 said:" + activeGame.player1Choice)
+                        print("Player 2 said:" + activeGame.player2Choice)
+                        msgPlayer1, msgPlayer2 = "Tie this round", "Tie this round"
+                        if activeGame.player1Choice == activeGame.player2Choice and activeGame.player1Choice != "game":
+                            activeGame.responseSent = 1
+                            activeGame.round += 1
+                        elif (activeGame.player1Choice == "r" and activeGame.player2Choice == "s") or (
+                                activeGame.player1Choice == "s" and activeGame.player2Choice == "p") or (
+                                activeGame.player1Choice == "p" and activeGame.player2Choice == "r"):
+                            msgPlayer1, msgPlayer2 = "Won this rounds", "Lost this rounds"
+                            activeGame.client1Points += 1
+                            activeGame.responseSent = 1
+                            activeGame.round += 1
+                        elif (activeGame.player1Choice == "r" and activeGame.player2Choice == "p") or (
+                                activeGame.player1Choice == "s" and activeGame.player2Choice == "r") or (
+                                activeGame.player1Choice == "p" and activeGame.player2Choice == "s"):
+                            msgPlayer1, msgPlayer2 = "Lost this rounds", "Won this rounds "
+                            activeGame.client2Points += 1
+                            activeGame.responseSent = 1
+                            activeGame.round += 1
+                        else:
+                            msgPlayer1, msgPlayer2 = "Invalid choice", "Invalid choice"
+
+                        # Send the message to the clients
+                        activeGame.socket1.sendall(msgPlayer1.encode())
+                        activeGame.socket2.sendall(msgPlayer2.encode())
+
+                        # Reset the choices
+                        activeGame.player1Choice = ""
+                        activeGame.player2Choice = ""
+                        # If the game is over remove the game from the active games list and the lobby
+                        if activeGame.round == 4:
+                            if activeGame.client1Points > activeGame.client2Points:
+                                msgPlayer1, msgPlayer2 = "You won the game!", "You lost the game, better luck next time."
+                            elif activeGame.client1Points < activeGame.client2Points:
+                                msgPlayer1, msgPlayer2 = "You lost the game, better luck next time.", "You won the game!"
                             else:
-                                game.socket1.sendall("Game ended in tie".encode())
-                                game.socket2.sendall("Game ended in tie".encode())
-                            print("Game ended between " + str(game.socket1) + " and " + str(
-                                game.socket2))
-                            gamelobby.remove(game.socket1)
-                            gamelobby.remove(game.socket2)
-                            activeGames.remove(game)
+                                msgPlayer1, msgPlayer2 = "Game ended in tie.", "Game ended in tie."
+                            # Send the same end message to both players
+                            msg = " Removed the game from the lobby, you can now start a new game with the command game"
+                            msgPlayer1 += msg
+                            msgPlayer2 += msg
+                            # Send the message to the clients
+                            activeGame.socket1.sendall(msgPlayer1.encode())
+                            activeGame.socket2.sendall(msgPlayer2.encode())
+                            print("Game ended between " + str(activeGame.socket1) + " and " + str(
+                                activeGame.socket2))
+                            # Remove players from the lobby
+                            gamelobby.remove(activeGame.socket1)
+                            gamelobby.remove(activeGame.socket2)
+                            activeGames.remove(activeGame)
             except socket.error:
                 print("Client " + str(addr) + " disconnected from the server")
-                activeSockets.remove(client)
+                connectedClients.remove(client)
                 gamelobby.remove(client)
         # If the lobby is empty break the loop
         if len(gamelobby) == 0:
             break
-    print("Lobby empty" + line)
+    checkingGames = False
+    print("Closed thread to check for game seeking game, no clients in lobby" + line)
 
 
-# List of active activeSockets
-activeSockets = []
+# List of active sockets
+connectedClients = []
+# Keep track of all players in the lobby
 gamelobby = []
 
 # Keep track of all the client requests
 clientRequests = []
+checkingGames = False
 
+
+# This client will hold the information about the client requests
 
 class ClientLog:
-    def __init__(self, clientSocket, request):
-        self.clientSocket = clientSocket
+    def __init__(self, client, request):
+        self.client = client
         self.request = request
 
 
+# This object will hold all the information about the game
 class Game:
-    def __init__(self, clientSocket1, clientSocket2, player1Choice, player2Choice, clientSocket1Points,
-                 clientSocket2Points, round):
-        self.socket1 = clientSocket1
-        self.socket2 = clientSocket2
+    def __init__(self, socket1, socket2, player1Choice, player2Choice, player1Points,
+                 player2Points, responseSent, rounds):
+        self.socket1 = socket1
+        self.socket2 = socket2
         self.player1Choice = player1Choice
         self.player2Choice = player2Choice
-        self.clientSocket1Points = clientSocket1Points
-        self.clientSocket2Points = clientSocket2Points
-        self.round = round
+        self.client1Points = player1Points
+        self.client2Points = player2Points
+        self.responseSent = responseSent
+        self.round = rounds
 
 
 # This loop will run forever, accepting connections and serving creating a new thread for each connection
 while True:
-    thread.start_new_thread(checkLobby, ())
+
     # Accept a connections
     clientSocket, addr = serverSocket.accept()
-    # Add the client to the list of activeSockets
-    activeSockets.append(clientSocket)
+    # Add the client to the list of connectedClients
+    connectedClients.append(clientSocket)
     broadcast(clientSocket, addr)
     thread.start_new_thread(handleClient, (clientSocket, addr))
-    # Start a new thread to check for disconnected activeSockets if not started
-
-    if len(activeSockets) == 1:
+    # Start a new thread to check for disconnected connectedClients if not started
+    if len(connectedClients) == 1:
         thread.start_new_thread(checkForConnections, ())
+    # Start a new thread to check for game seeking clients
+    if len(gamelobby) > 1 or checkingGames is False:
+        thread.start_new_thread(game, ())
 
 # Close the socket
 serverSocket.close()
